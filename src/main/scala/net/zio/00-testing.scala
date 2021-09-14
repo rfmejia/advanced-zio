@@ -32,7 +32,14 @@ object SimplestSpec extends DefaultRunnableSpec {
    *
    * Using sbt or your IDE, run `SpecBasics` by using its `main` function (not the test runner).
    */
-  def spec = suite("SimplestSpec")()
+  def spec = suite("SimplestSpec")(
+    test("1 + 1") {
+      assertTrue(1 + 1 == 2)
+    } +
+      test("Either.right") {
+        assertTrue((Right(32): Either[Int, Int]) == Right(32))
+      }
+  )
 }
 
 /**
@@ -66,7 +73,7 @@ object BasicAssertions extends DefaultRunnableSpec {
        *
        * Using `assertTrue`, assert that 2 + 2 == 4.
        */
-      assertTrue(false)
+      assertTrue(2 + 2 == 4)
     } +
       test("sherlock misspelling") {
 
@@ -75,7 +82,8 @@ object BasicAssertions extends DefaultRunnableSpec {
          *
          * Examine the output of this failed test. Then fix the test so that it passes.
          */
-        assertTrue("sherlock".contains("sure"))
+        assertTrue("sherlock".startsWith("sher")) &&
+        assertTrue("sherlock".size == 8)
       } +
       test("multiple assertions") {
         val string = "cannac"
@@ -90,15 +98,20 @@ object BasicAssertions extends DefaultRunnableSpec {
          *  - the string starts with "can"
          *  - the reverse of the string is equal to itself
          */
-        assertTrue(false)
+        assertTrue(string.size == 6) &&
+        assertTrue(string.startsWith("can")) &&
+        assertTrue(string.reverse == string)
+      } +
+      /**
+       * EXERCISE
+       *
+       * Using `+`, add another test to the suite, which you can create with
+       * `test`, as above. This test should verify that the contents of one
+       * of the buildings in `buildings` contains a `needle`.
+       */
+      test("needle in building") {
+        assertTrue(buildings.exists(_.contents.contains("needle")))
       }
-    /**
-   * EXERCISE
-   *
-   * Using `+`, add another test to the suite, which you can create with
-   * `test`, as above. This test should verify that the contents of one
-   * of the buildings in `buildings` contains a `needle`.
-   */
   }
 }
 
@@ -119,9 +132,9 @@ object BasicAssertionsZIO extends DefaultRunnableSpec {
        * results in 2.
        */
       for {
-        ref <- Ref.make(0)
+        ref <- Ref.make(1)
         v   <- ref.updateAndGet(_ + 1)
-      } yield assertTrue(false)
+      } yield assertTrue(v == 2)
     } +
       test("multiple assertions") {
 
@@ -135,10 +148,10 @@ object BasicAssertionsZIO extends DefaultRunnableSpec {
          *  - It is greater than 0
          */
         for {
-          ref  <- Ref.make(0)
+          ref  <- Ref.make(1)
           rand <- Random.nextIntBetween(1, 4)
           v    <- ref.updateAndGet(_ + 1).repeatN(rand * 2)
-        } yield assertTrue(false)
+        } yield assertTrue(v % 2 == 0) && assertTrue(v > 0)
       }
   }
 }
@@ -167,7 +180,7 @@ object BasicTestAspects extends DefaultRunnableSpec {
        * the failure is ignored.
        */
       assertTrue(false)
-    } +
+    } @@ ignore +
       test("flaky") {
 
         /**
@@ -179,7 +192,7 @@ object BasicTestAspects extends DefaultRunnableSpec {
         for {
           number <- Random.nextInt
         } yield assertTrue(number % 2 == 0)
-      } +
+      } @@ flaky +
       test("nonFlaky") {
 
         /**
@@ -191,7 +204,7 @@ object BasicTestAspects extends DefaultRunnableSpec {
         for {
           number <- Random.nextIntBetween(0, 100)
         } yield assertTrue(number * 2 % 2 == 0)
-      } +
+      } @@ nonFlaky +
       /**
        * EXERCISE
        *
@@ -210,7 +223,7 @@ object BasicTestAspects extends DefaultRunnableSpec {
               _ <- Console.printLine("Test 2")
             } yield assertTrue(true)
           }
-      }
+      } @@ sequential
   }
 }
 
@@ -240,7 +253,7 @@ object TestFixtures extends DefaultRunnableSpec {
       for {
         value <- UIO(beforeRef.get)
       } yield assertTrue(value > 0)
-    } +
+    } @@ before(incBeforeRef) +
       /**
        * EXERCISE
        *
@@ -251,7 +264,7 @@ object TestFixtures extends DefaultRunnableSpec {
         for {
           _ <- Console.printLine("after")
         } yield assertTrue(true)
-      } +
+      } @@ after(ZIO.debug("done with after")) +
       /**
        * EXERCISE
        *
@@ -262,7 +275,7 @@ object TestFixtures extends DefaultRunnableSpec {
         for {
           value <- UIO(aroundRef.get)
         } yield assertTrue(value == 1)
-      }
+      } @@ TestAspect.around(UIO(aroundRef.incrementAndGet()), UIO(aroundRef.decrementAndGet()))
   }
 }
 
@@ -287,9 +300,10 @@ object TestServices extends DefaultRunnableSpec {
       test("TestClock") {
         for {
           fiber <- Clock.sleep(1.second).as(42).fork
+          _     <- TestClock.adjust(1.second)
           value <- fiber.join
         } yield assertTrue(value == 42)
-      } @@ ignore +
+      } +
         /**
          * EXERCISE
          *
@@ -298,9 +312,10 @@ object TestServices extends DefaultRunnableSpec {
          */
         test("TestSystem") {
           for {
+            _    <- TestSystem.putEnv("name", "Sherlock Holmes")
             name <- System.env("name").some
           } yield assertTrue(name == "Sherlock Holmes")
-        } @@ ignore +
+        } +
         /**
          * EXERCISE
          *
@@ -310,9 +325,10 @@ object TestServices extends DefaultRunnableSpec {
         test("TestConsole") {
           for {
             _    <- Console.printLine("What is your name?")
+            _    <- TestConsole.feedLines("Sherlock Holmes")
             name <- Console.readLine
           } yield assertTrue(name == "Sherlock Holmes")
-        } @@ ignore +
+        } +
         /**
          * EXERCISE
          *
@@ -329,7 +345,7 @@ object TestServices extends DefaultRunnableSpec {
             result <- if (guess == number.toString) Console.printLine("Good job!").as(true)
                      else Console.printLine("Try again!").as(false)
           } yield assertTrue(result)
-        } @@ ignore +
+        } +
         /**
          * EXERCISE
          *
@@ -339,10 +355,11 @@ object TestServices extends DefaultRunnableSpec {
          * the provided effect runs using the live services.
          */
         test("Live") {
-          for {
+          val task = for {
             now <- Clock.instant.map(_.getEpochSecond())
           } yield assertTrue(now > 0)
-        } @@ ignore
+          Live.live(task)
+        }
     }
 }
 
@@ -397,7 +414,7 @@ object CustomLayers extends DefaultRunnableSpec {
      * Implement the following method of the user repo to operate on the
      * in-memory test data stored in the Ref.
      */
-    def getUserById(id: String): Task[Option[User]] = ???
+    def getUserById(id: String): Task[Option[User]] = ref.get.map(_.get(id))
 
     /**
      * EXERCISE
@@ -405,7 +422,7 @@ object CustomLayers extends DefaultRunnableSpec {
      * Implement the following method of the user repo to operate on the
      * in-memory test data stored in the Ref.
      */
-    def updateUser(user: User): Task[Unit] = ???
+    def updateUser(user: User): Task[Unit] = ref.update(_.updated(user.id, user))
   }
 
   /**
@@ -413,7 +430,11 @@ object CustomLayers extends DefaultRunnableSpec {
    *
    * Create a test user repo layer and populate it with some test data.
    */
-  lazy val testUserRepo: ULayer[Has[UserRepo]] = ???
+  lazy val testUserRepo: ULayer[Has[UserRepo]] =
+    (for {
+      testMap <- UIO(Map("sherlock@holmes.com" -> User("sherlock@holmes.com", "Sherlock Holmes", 42)))
+      ref     <- Ref.make(testMap)
+    } yield TestUserRepo(ref)).toLayer
 
   def spec =
     suite("CustomLayers") {
@@ -429,8 +450,10 @@ object CustomLayers extends DefaultRunnableSpec {
          * Finally, to make the test pass, you will have to create test
          * data matches your test expectations.
          */
-        assertTrue(false)
-      } @@ ignore +
+        (for {
+          user <- UserRepo.getUserById("sherlock@holmes.com").some
+        } yield assertTrue(user.age == 42))
+      }.provideCustomLayer(testUserRepo) +
         /**
          * EXERCISE
          *
@@ -442,12 +465,16 @@ object CustomLayers extends DefaultRunnableSpec {
          */
         suite("shared layer") {
           test("adding a user") {
-            assertTrue(false)
+            for {
+              _ <- UserRepo.updateUser(User("id", "name", 30))
+            } yield assertTrue(true)
           } +
             test("getting a user") {
-              assertTrue(false)
+              for {
+                user <- UserRepo.getUserById("id").some
+              } yield assertTrue(user.age == 30)
             }
-        } @@ sequential @@ ignore
+        }.provideCustomLayerShared(testUserRepo) @@ sequential
     }
 }
 
@@ -467,5 +494,10 @@ object CustomLayers extends DefaultRunnableSpec {
  *
  */
 object Graduation extends DefaultRunnableSpec {
+  trait EmailService {
+    def send(to: String, subject: String, message: String)
+  }
+  object EmailService extends Accessible[EmailService]
+
   def spec = suite("Graduation")()
 }
