@@ -129,7 +129,7 @@ object BasicAssertionsZIO extends DefaultRunnableSpec {
        * EXERCISE
        *
        * Using `assertTrue`, assert that incrementing a zero-valued ref by one
-       * results in 2.
+       * results in 1.
        */
       for {
         ref <- Ref.make(1)
