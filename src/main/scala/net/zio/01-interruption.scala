@@ -50,8 +50,8 @@ object InterruptGuarantees extends DefaultRunnableSpec {
         _       <- latch.await // await until fiber starts before interrupting
         _       <- fiber.interrupt
         v       <- ref.get
-      } yield assertTrue(v == 0)
-    } @@ ignore +
+      } yield assertTrue(v == 1)
+    } +
       test("onExit") {
 
         /**
@@ -199,7 +199,7 @@ object BasicDerived extends DefaultRunnableSpec {
           _       <- fiber.interrupt
           v       <- ref.get
         } yield assertTrue(v)
-      } @@ ignore +
+      } +
         /**
          * EXERCISE
          *
